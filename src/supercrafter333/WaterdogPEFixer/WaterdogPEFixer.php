@@ -38,15 +38,12 @@ class WaterdogPEFixer extends PluginBase implements Listener
      */
     public function onDataPacketReceive(DataPacketReceiveEvent $event): void
     {
-        $this->getLogger()->debug("onDataPacketReceive fired");
         $packet = $event->getPacket();
-        $this->getLogger()->info("onDataPacketReceive fired for session " . spl_object_hash($event->getOrigin()) . " ip=" . $event->getOrigin()->getIp());
         if (!$packet instanceof LoginPacket) {
             return;
         }
 
         try {
-            // Increase packet limit for Waterdog
             foreach ($this->getServer()->getNetwork()->getInterfaces() as $interface) {
                 if ($interface instanceof RakLibInterface) {
                     try {
@@ -57,14 +54,11 @@ class WaterdogPEFixer extends PluginBase implements Listener
                 }
             }
 
-            // Parse ClientData JWT (API 5 method)
             [, $clientDataClaims, ] = JwtUtils::parse($packet->clientDataJwt);
             $this->getLogger()->info("Login packet clientDataJwt parsed, found Waterdog_IP=" . ($clientDataClaims['Waterdog_IP'] ?? $clientDataClaims['Waterdog IP'] ?? 'null') . ", Waterdog_XUID=" . ($clientDataClaims['Waterdog_XUID'] ?? $clientDataClaims['Waterdog XUID'] ?? 'null'));
 
-            // Log all claim keys for debugging
             $this->getLogger()->debug("clientDataClaims keys: " . implode(", ", array_keys($clientDataClaims)));
 
-            // Extract Waterdog custom data
             $waterdogData = [
                 'ip' => $clientDataClaims['Waterdog_IP'] ?? $clientDataClaims['Waterdog IP'] ?? null,
                 'xuid' => $clientDataClaims['Waterdog_XUID'] ?? $clientDataClaims['Waterdog XUID'] ?? null,
@@ -84,8 +78,6 @@ class WaterdogPEFixer extends PluginBase implements Listener
                 }
             }
 
-            // Store for later retrieval in PlayerLoginEvent
-            // Using object hash as key (temporary storage during login)
             $sessionKey = spl_object_hash($event->getOrigin());
             $this->waterdogData[$sessionKey] = $waterdogData;
             if (!empty($waterdogData['username'])) {
@@ -146,13 +138,10 @@ class WaterdogPEFixer extends PluginBase implements Listener
     }
 
     /**
-     * STEP 2: Apply Waterdog data to Player (Player now exists)
      * Runs after Player object is created
      */
     public function onPlayerLogin(PlayerLoginEvent $event): void
     {
-        $this->getLogger()->debug("onPlayerLogin fired for " . $event->getPlayer()->getName());
-        $this->getLogger()->info("onPlayerLogin fired for " . $event->getPlayer()->getName() . " session=" . spl_object_hash($event->getPlayer()->getNetworkSession()) . " ip=" . $event->getPlayer()->getNetworkSession()->getIp());
         $player = $event->getPlayer();
 
         $sessionKey = spl_object_hash($player->getNetworkSession());
