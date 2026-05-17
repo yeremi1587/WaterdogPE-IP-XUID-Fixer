@@ -3,6 +3,7 @@
 namespace supercrafter333\WaterdogPEFixer;
 
 use pocketmine\event\Listener;
+use pocketmine\event\player\PlayerLoginEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\network\mcpe\protocol\LoginPacket;
@@ -14,6 +15,8 @@ use ReflectionProperty;
 
 class WaterdogPEFixer extends PluginBase implements Listener
 {
+    /** @var array<string, array{ip?: string, xuid?: string}> */
+    private array $waterdogData = [];
 
     public function onEnable(): void
     {
@@ -23,44 +26,87 @@ class WaterdogPEFixer extends PluginBase implements Listener
     #################################
     ##[Fix Waterdog(PE) IP & XUID ]##
     #################################
-    public function onPacketReceive(DataPacketReceiveEvent $event): void {
+
+    /**
+     * STEP 1: Extract Waterdog data from LoginPacket
+     * Runs during packet reception (before Player is created)
+     */
+    public function onPacketReceive(DataPacketReceiveEvent $event): void
+    {
         $packet = $event->getPacket();
-        if($packet instanceof LoginPacket) {
-            foreach ( $this->getServer()->getNetwork()->getInterfaces() as $interface ) {
-                if ( $interface instanceof RakLibInterface ) {
+        if (!$packet instanceof LoginPacket) {
+            return;
+        }
+
+        try {
+            // Increase packet limit for Waterdog
+            foreach ($this->getServer()->getNetwork()->getInterfaces() as $interface) {
+                if ($interface instanceof RakLibInterface) {
                     try {
-                        $reflector = new ReflectionProperty( $interface, "interface" );
-                        $reflector->setAccessible( true );
-                        $reflector->getValue( $interface )->sendOption( "packetLimit", 900000000000 );
-                    } catch ( ReflectionException $e ) {}
+                        $reflector = new ReflectionProperty($interface, "interface");
+                        $reflector->setAccessible(true);
+                        $reflector->getValue($interface)->sendOption("packetLimit", 900000000000);
+                    } catch (ReflectionException $e) {}
                 }
             }
-            
-            // Parse ClientData JWT for API 5
+
+            // Parse ClientData JWT (API 5 method)
+            [, $clientDataClaims, ] = JwtUtils::parse($packet->clientDataJwt);
+
+            // Extract Waterdog custom data
+            $waterdogData = [
+                'ip' => $clientDataClaims['Waterdog_IP'] ?? null,
+                'xuid' => $clientDataClaims['Waterdog_XUID'] ?? null,
+            ];
+
+            // Store for later retrieval in PlayerLoginEvent
+            // Using object hash as key (temporary storage during login)
+            $sessionKey = spl_object_hash($event->getOrigin());
+            $this->waterdogData[$sessionKey] = $waterdogData;
+        } catch (\Exception $e) {
+            $this->getLogger()->debug("Error parsing ClientData JWT: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * STEP 2: Apply Waterdog data to Player (Player now exists)
+     * Runs after Player object is created
+     */
+    public function onPlayerLogin(PlayerLoginEvent $event): void
+    {
+        $player = $event->getPlayer();
+
+        // Get most recent Waterdog data (queue approach)
+        if (empty($this->waterdogData)) {
+            return;
+        }
+
+        // Pop the first/most likely matching data
+        $waterdogData = array_pop($this->waterdogData);
+
+        if ($waterdogData['ip'] !== null) {
             try {
-                [, $clientDataClaims, ] = JwtUtils::parse($packet->clientDataJwt);
-                
-                if(isset($clientDataClaims["Waterdog_IP"])) {
-                    $class = new ReflectionClass($event->getPlayer());
+                $class = new ReflectionClass($player);
+                $prop = $class->getProperty("ip");
+                $prop->setAccessible(true);
+                $prop->setValue($player, $waterdogData['ip']);
 
-                    $prop = $class->getProperty("ip");
-                    $prop->setAccessible(true);
-                    $prop->setValue($event->getPlayer(), $clientDataClaims["Waterdog_IP"]);
-                }
-                if (isset($clientDataClaims["Waterdog_XUID"])) {
-                    $class = new ReflectionClass($event->getPlayer());
+                $this->getLogger()->debug("Set IP for {$player->getName()}: {$waterdogData['ip']}");
+            } catch (ReflectionException $e) {
+                $this->getLogger()->debug("Could not set IP: " . $e->getMessage());
+            }
+        }
 
-                    $prop = $class->getProperty("xuid");
-                    $prop->setAccessible(true);
-                    $prop->setValue($event->getPlayer(), $clientDataClaims["Waterdog_XUID"]);
-                    
-                    $packetReflection = new ReflectionClass($packet);
-                    $packetXuidProperty = $packetReflection->getProperty("xuid");
-                    $packetXuidProperty->setAccessible(true);
-                    $packetXuidProperty->setValue($packet, $clientDataClaims["Waterdog_XUID"]);
-                }
-            } catch ( \Exception $e ) {
-                $this->getLogger()->debug("Error parsing ClientData JWT: " . $e->getMessage());
+        if ($waterdogData['xuid'] !== null) {
+            try {
+                $class = new ReflectionClass($player);
+                $prop = $class->getProperty("xuid");
+                $prop->setAccessible(true);
+                $prop->setValue($player, $waterdogData['xuid']);
+
+                $this->getLogger()->debug("Set XUID for {$player->getName()}: {$waterdogData['xuid']}");
+            } catch (ReflectionException $e) {
+                $this->getLogger()->debug("Could not set XUID: " . $e->getMessage());
             }
         }
     }
