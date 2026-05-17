@@ -5,7 +5,7 @@ namespace supercrafter333\WaterdogPEFixer;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\network\mcpe\protocol\LoginPacket;
-use pocketmine\network\mcpe\RakLibInterface;
+use pocketmine\network\raklib\RakLibInterface;
 use pocketmine\plugin\PluginBase;
 use ReflectionClass;
 use ReflectionException;
@@ -14,7 +14,7 @@ use ReflectionProperty;
 class WaterdogPEFixer extends PluginBase implements Listener
 {
 
-    public function onEnable()
+    public function onEnable(): void
     {
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
     }
