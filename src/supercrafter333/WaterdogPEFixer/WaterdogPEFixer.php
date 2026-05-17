@@ -4,6 +4,7 @@ namespace supercrafter333\WaterdogPEFixer;
 
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketReceiveEvent;
+use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\raklib\RakLibInterface;
 use pocketmine\plugin\PluginBase;
@@ -35,33 +36,31 @@ class WaterdogPEFixer extends PluginBase implements Listener
                 }
             }
             
-            // Access clientData via Reflection for API 5 compatibility
+            // Parse ClientData JWT for API 5
             try {
-                $packetReflection = new ReflectionClass($packet);
-                $clientDataProperty = $packetReflection->getProperty("clientData");
-                $clientDataProperty->setAccessible(true);
-                $clientData = $clientDataProperty->getValue($packet);
+                [, $clientDataClaims, ] = JwtUtils::parse($packet->clientDataJwt);
                 
-                if(isset($clientData["Waterdog_IP"])) {
+                if(isset($clientDataClaims["Waterdog_IP"])) {
                     $class = new ReflectionClass($event->getPlayer());
 
                     $prop = $class->getProperty("ip");
                     $prop->setAccessible(true);
-                    $prop->setValue($event->getPlayer(), $clientData["Waterdog_IP"]);
+                    $prop->setValue($event->getPlayer(), $clientDataClaims["Waterdog_IP"]);
                 }
-                if (isset($clientData["Waterdog_XUID"])) {
+                if (isset($clientDataClaims["Waterdog_XUID"])) {
                     $class = new ReflectionClass($event->getPlayer());
 
                     $prop = $class->getProperty("xuid");
                     $prop->setAccessible(true);
-                    $prop->setValue($event->getPlayer(), $clientData["Waterdog_XUID"]);
+                    $prop->setValue($event->getPlayer(), $clientDataClaims["Waterdog_XUID"]);
                     
+                    $packetReflection = new ReflectionClass($packet);
                     $packetXuidProperty = $packetReflection->getProperty("xuid");
                     $packetXuidProperty->setAccessible(true);
-                    $packetXuidProperty->setValue($packet, $clientData["Waterdog_XUID"]);
+                    $packetXuidProperty->setValue($packet, $clientDataClaims["Waterdog_XUID"]);
                 }
-            } catch ( ReflectionException $e ) {
-                $this->getLogger()->debug("Error accessing clientData: " . $e->getMessage());
+            } catch ( \Exception $e ) {
+                $this->getLogger()->debug("Error parsing ClientData JWT: " . $e->getMessage());
             }
         }
     }
