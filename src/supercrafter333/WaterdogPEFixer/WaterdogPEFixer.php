@@ -34,20 +34,34 @@ class WaterdogPEFixer extends PluginBase implements Listener
                     } catch ( ReflectionException $e ) {}
                 }
             }
-            if(isset($packet->clientData["Waterdog_IP"])) {
-                $class = new ReflectionClass($event->getPlayer());
+            
+            // Access clientData via Reflection for API 5 compatibility
+            try {
+                $packetReflection = new ReflectionClass($packet);
+                $clientDataProperty = $packetReflection->getProperty("clientData");
+                $clientDataProperty->setAccessible(true);
+                $clientData = $clientDataProperty->getValue($packet);
+                
+                if(isset($clientData["Waterdog_IP"])) {
+                    $class = new ReflectionClass($event->getPlayer());
 
-                $prop = $class->getProperty("ip");
-                $prop->setAccessible(true);
-                $prop->setValue($event->getPlayer(), $packet->clientData["Waterdog_IP"]);
-            }
-            if (isset($packet->clientData["Waterdog_XUID"])) {
-                $class = new ReflectionClass($event->getPlayer());
+                    $prop = $class->getProperty("ip");
+                    $prop->setAccessible(true);
+                    $prop->setValue($event->getPlayer(), $clientData["Waterdog_IP"]);
+                }
+                if (isset($clientData["Waterdog_XUID"])) {
+                    $class = new ReflectionClass($event->getPlayer());
 
-                $prop = $class->getProperty("xuid");
-                $prop->setAccessible(true);
-                $prop->setValue($event->getPlayer(), $packet->clientData["Waterdog_XUID"]);
-                $packet->xuid = $packet->clientData["Waterdog_XUID"];
+                    $prop = $class->getProperty("xuid");
+                    $prop->setAccessible(true);
+                    $prop->setValue($event->getPlayer(), $clientData["Waterdog_XUID"]);
+                    
+                    $packetXuidProperty = $packetReflection->getProperty("xuid");
+                    $packetXuidProperty->setAccessible(true);
+                    $packetXuidProperty->setValue($packet, $clientData["Waterdog_XUID"]);
+                }
+            } catch ( ReflectionException $e ) {
+                $this->getLogger()->debug("Error accessing clientData: " . $e->getMessage());
             }
         }
     }
