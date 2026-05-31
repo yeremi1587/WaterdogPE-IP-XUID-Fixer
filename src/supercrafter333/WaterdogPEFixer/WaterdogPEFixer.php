@@ -27,15 +27,6 @@ class WaterdogPEFixer extends PluginBase implements Listener
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
         $this->getLogger()->info("WaterdogPEFixer enabled");
     }
-
-    #################################
-    ##[Fix Waterdog(PE) IP & XUID ]##
-    #################################
-
-    /**
-     * STEP 1: Extract Waterdog data from LoginPacket
-     * Runs during packet reception (before Player is created)
-     */
     public function onDataPacketReceive(DataPacketReceiveEvent $event): void
     {
         $packet = $event->getPacket();
@@ -136,10 +127,6 @@ class WaterdogPEFixer extends PluginBase implements Listener
             }
         }
     }
-
-    /**
-     * Runs after Player object is created
-     */
     public function onPlayerLogin(PlayerLoginEvent $event): void
     {
         $player = $event->getPlayer();
